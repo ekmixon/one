@@ -99,7 +99,7 @@
     "react-ace": "9.1.4",
     "react-dom": "16.13.1",
     "react-flow-renderer": "5.11.1",
-    "react-hook-form": "7.9.0",
+    "react-hook-form": "7.11.1",
     "react-json-pretty": "2.2.0",
     "react-minimal-pie-chart": "8.1.0",
     "react-redux": "7.2.1",

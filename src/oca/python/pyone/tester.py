@@ -30,16 +30,14 @@ pickling_support.install()
 
 
 def read_fixture_file(fixture_file):
-    f = open(fixture_file, "rt")
-    ret = load(f)
-    f.close()
+    with open(fixture_file, "rt") as f:
+        ret = load(f)
     return ret
 
 
 def write_fixture_file(fixture_file, obj):
-    f = open(fixture_file, "wb")
-    f.write(json_dumps(obj).encode())
-    f.close()
+    with open(fixture_file, "wb") as f:
+        f.write(json_dumps(obj).encode())
 
 class OneServerTester(OneServer):
     '''
@@ -67,7 +65,7 @@ class OneServerTester(OneServer):
         if path.isfile(fixture_file):
             self._fixtures = read_fixture_file(fixture_file)
         else:
-            self._fixtures = dict()
+            self._fixtures = {}
 
         # all members involved in the fixtures must be predefined or
         # the magic getter method will trigger resulting in stack overflows
@@ -84,8 +82,8 @@ class OneServerTester(OneServer):
         :return:
         """
 
-        if not name in self._fixtures:
-            self._fixtures[name] = dict()
+        if name not in self._fixtures:
+            self._fixtures[name] = {}
 
         self._fixture_unit_test = self._fixtures[name]
 
@@ -103,12 +101,12 @@ class OneServerTester(OneServer):
         :return: file name were to store to or read from the fixture data
         '''
 
-        ret = self._fixture_unit_test[methodname][self._fixture_signature(methodname,params)].pop(0)
-
-        if not ret:
+        if ret := self._fixture_unit_test[methodname][
+            self._fixture_signature(methodname, params)
+        ].pop(0):
+            return ret
+        else:
             raise Exception("Could not read fixture, if the tests changed you must re-record fixtures")
-
-        return ret
 
     def _set_fixture(self,methodname,params,object):
         '''
@@ -120,10 +118,10 @@ class OneServerTester(OneServer):
 
         signature = self._fixture_signature(methodname,params)
 
-        if not methodname in self._fixture_unit_test:
-            self._fixture_unit_test[methodname]=dict()
+        if methodname not in self._fixture_unit_test:
+            self._fixture_unit_test[methodname] = {}
 
-        if not signature in self._fixture_unit_test[methodname]:
+        if signature not in self._fixture_unit_test[methodname]:
             self._fixture_unit_test[methodname][signature]=[]
 
         self._fixture_unit_test[methodname][signature].append(object)

@@ -114,7 +114,9 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
         SimpleHTTPRequestHandler.__init__(self, req, addr, server)
 
     def log_message(self, format, *args):
-        self.logger.info("%s - - [%s] %s" % (self.address_string(), self.log_date_time_string(), format % args))
+        self.logger.info(
+            f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}"
+        )
 
     @staticmethod
     def unmask(buf, hlen, plen):
@@ -171,9 +173,9 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
         payload_len = len(buf)
         if payload_len <= 125:
             header = pack('>BB', b1, payload_len)
-        elif payload_len > 125 and payload_len < 65536:
+        elif payload_len < 65536:
             header = pack('>BBH', b1, 126, payload_len)
-        elif payload_len >= 65536:
+        else:
             header = pack('>BBQ', b1, 127, payload_len)
 
         #self.msg("Encoded: %s", repr(header + buf))
@@ -195,21 +197,21 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
              'close_reason' : string}
         """
 
-        f = {'fin'          : 0,
-             'opcode'       : 0,
-             'masked'       : False,
-             'hlen'         : 2,
-             'length'       : 0,
-             'payload'      : None,
-             'left'         : 0,
-             'close_code'   : 1000,
-             'close_reason' : ''}
-
         if logger is None:
             logger = WebSocketServer.get_logger()
 
         blen = len(buf)
-        f['left'] = blen
+        f = {
+            'fin': 0,
+            'opcode': 0,
+            'masked': False,
+            'hlen': 2,
+            'length': 0,
+            'payload': None,
+            'close_code': 1000,
+            'close_reason': '',
+            'left': blen,
+        }
 
         if blen < f['hlen']:
             return f # Incomplete frame header
@@ -246,7 +248,7 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
             f['payload'] = WebSocketRequestHandler.unmask(buf, f['hlen'],
                                                   f['length'])
         else:
-            logger.debug("Unmasked frame: %s" % repr(buf))
+            logger.debug(f"Unmasked frame: {repr(buf)}")
 
             if strict:
                 raise WebSocketRequestHandler.CClose(1002, "The client sent an unmasked frame.")
@@ -257,8 +259,7 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
             try:
                 f['payload'] = b64decode(f['payload'])
             except:
-                logger.exception("Exception while b64decoding buffer: %s" %
-                                 (repr(buf)))
+                logger.exception(f"Exception while b64decoding buffer: {repr(buf)}")
                 raise
 
         if f['opcode'] == 0x08:
@@ -283,17 +284,17 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
     def msg(self, msg, *args, **kwargs):
         """ Output message with handler_id prefix. """
         prefix = "% 3d: " % self.handler_id
-        self.logger.log(logging.INFO, "%s%s" % (prefix, msg), *args, **kwargs)
+        self.logger.log(logging.INFO, f"{prefix}{msg}", *args, **kwargs)
 
     def vmsg(self, msg, *args, **kwargs):
         """ Same as msg() but as debug. """
         prefix = "% 3d: " % self.handler_id
-        self.logger.log(logging.DEBUG, "%s%s" % (prefix, msg), *args, **kwargs)
+        self.logger.log(logging.DEBUG, f"{prefix}{msg}", *args, **kwargs)
 
     def warn(self, msg, *args, **kwargs):
         """ Same as msg() but as warning. """
         prefix = "% 3d: " % self.handler_id
-        self.logger.log(logging.WARN, "%s%s" % (prefix, msg), *args, **kwargs)
+        self.logger.log(logging.WARN, f"{prefix}{msg}", *args, **kwargs)
 
     #
     # Main WebSocketRequestHandler methods
@@ -363,7 +364,7 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
                                      strict=self.strict_mode)
             #self.msg("Received buf: %s, frame: %s", repr(buf), frame)
 
-            if frame['payload'] == None:
+            if frame['payload'] is None:
                 # Incomplete/partial frame
                 self.print_traffic("}.")
                 if frame['left'] > 0:
@@ -401,11 +402,7 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
 
             bufs.append(frame['payload'])
 
-            if frame['left']:
-                buf = buf[-frame['left']:]
-            else:
-                buf = ''
-
+            buf = buf[-frame['left']:] if frame['left'] else ''
         return bufs, closed
 
     def send_close(self, code=1000, reason=''):
@@ -429,10 +426,9 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
         h = self.headers
 
         prot = 'WebSocket-Protocol'
-        protocols = h.get('Sec-'+prot, h.get(prot, '')).split(',')
+        protocols = h.get(f'Sec-{prot}', h.get(prot, '')).split(',')
 
-        ver = h.get('Sec-WebSocket-Version')
-        if ver:
+        if ver := h.get('Sec-WebSocket-Version'):
             # HyBi/IETF version of the protocol
 
             # HyBi-07 report version 7
@@ -441,7 +437,7 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
             if ver in ['7', '8', '13']:
                 self.version = "hybi-%02d" % int(ver)
             else:
-                self.send_error(400, "Unsupported protocol version %s" % ver)
+                self.send_error(400, f"Unsupported protocol version {ver}")
                 return False
 
             key = h['Sec-WebSocket-Key']
@@ -478,64 +474,58 @@ class WebSocketRequestHandler(SimpleHTTPRequestHandler):
         new_websocket_client() will be called. Otherwise, False is returned.
         """
 
-        if (self.headers.get('upgrade') and
-            self.headers.get('upgrade').lower() == 'websocket'):
-
-            # ensure connection is authorized, and determine the target
-            self.validate_connection()
-
-            if not self.do_websocket_handshake():
-                return False
-
-            # Indicate to server that a Websocket upgrade was done
-            self.server.ws_connection = True
-            # Initialize per client settings
-            self.send_parts = []
-            self.recv_part  = None
-            self.start_time = int(time.time()*1000)
-
-            # client_address is empty with, say, UNIX domain sockets
-            client_addr = ""
-            is_ssl = False
-            try:
-                client_addr = self.client_address[0]
-                is_ssl = self.client_address[2]
-            except IndexError:
-                pass
-
-            if is_ssl:
-                self.stype = "SSL/TLS (wss://)"
-            else:
-                self.stype = "Plain non-SSL (ws://)"
-
-            self.log_message("%s: %s WebSocket connection", client_addr,
-                             self.stype)
-            self.log_message("%s: Version %s, base64: '%s'", client_addr,
-                             self.version, self.base64)
-            if self.path != '/':
-                self.log_message("%s: Path: '%s'", client_addr, self.path)
-
-            if self.record:
-                # Record raw frame data as JavaScript array
-                fname = "%s.%s" % (self.record,
-                                   self.handler_id)
-                self.log_message("opening record file: %s", fname)
-                self.rec = open(fname, 'w+')
-                encoding = "binary"
-                if self.base64: encoding = "base64"
-                self.rec.write("var VNC_frame_encoding = '%s';\n"
-                               % encoding)
-                self.rec.write("var VNC_frame_data = [\n")
-
-            try:
-                self.new_websocket_client()
-            except self.CClose:
-                # Close the client
-                _, exc, _ = sys.exc_info()
-                self.send_close(exc.args[0], exc.args[1])
-            return True
-        else:
+        if (
+            not self.headers.get('upgrade')
+            or self.headers.get('upgrade').lower() != 'websocket'
+        ):
             return False
+        # ensure connection is authorized, and determine the target
+        self.validate_connection()
+
+        if not self.do_websocket_handshake():
+            return False
+
+        # Indicate to server that a Websocket upgrade was done
+        self.server.ws_connection = True
+        # Initialize per client settings
+        self.send_parts = []
+        self.recv_part  = None
+        self.start_time = int(time.time()*1000)
+
+        # client_address is empty with, say, UNIX domain sockets
+        client_addr = ""
+        is_ssl = False
+        try:
+            client_addr = self.client_address[0]
+            is_ssl = self.client_address[2]
+        except IndexError:
+            pass
+
+        self.stype = "SSL/TLS (wss://)" if is_ssl else "Plain non-SSL (ws://)"
+        self.log_message("%s: %s WebSocket connection", client_addr,
+                         self.stype)
+        self.log_message("%s: Version %s, base64: '%s'", client_addr,
+                         self.version, self.base64)
+        if self.path != '/':
+            self.log_message("%s: Path: '%s'", client_addr, self.path)
+
+        if self.record:
+                # Record raw frame data as JavaScript array
+            fname = f"{self.record}.{self.handler_id}"
+            self.log_message("opening record file: %s", fname)
+            self.rec = open(fname, 'w+')
+            encoding = "base64" if self.base64 else "binary"
+            self.rec.write("var VNC_frame_encoding = '%s';\n"
+                           % encoding)
+            self.rec.write("var VNC_frame_data = [\n")
+
+        try:
+            self.new_websocket_client()
+        except self.CClose:
+            # Close the client
+            _, exc, _ = sys.exc_info()
+            self.send_close(exc.args[0], exc.args[1])
+        return True
 
     def do_GET(self):
         """Handle GET request. Calls handle_websocket(). If unsuccessful,
@@ -686,9 +676,9 @@ class WebSocketServer(object):
 
     @staticmethod
     def get_logger():
-        return logging.getLogger("%s.%s" % (
-            WebSocketServer.log_prefix,
-            WebSocketServer.__class__.__name__))
+        return logging.getLogger(
+            f"{WebSocketServer.log_prefix}.{WebSocketServer.__class__.__name__}"
+        )
 
     @staticmethod
     def socket(host, port=None, connect=False, prefer_ipv6=False,
@@ -701,14 +691,14 @@ class WebSocketServer(object):
         flags = 0
         if host == '':
             host = None
-        if connect and not (port or unix_socket):
+        if connect and not port and not unix_socket:
             raise Exception("Connect mode requires a port")
         if use_ssl and not ssl:
             raise Exception("SSL socket requested but Python SSL module not loaded.");
         if not connect and use_ssl:
             raise Exception("SSL only supported in connect mode (for now)")
         if not connect:
-            flags = flags | socket.AI_PASSIVE
+            flags |= socket.AI_PASSIVE
 
         if not unix_socket:
             addrs = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM,
@@ -837,14 +827,13 @@ class WebSocketServer(object):
                         keyfile=self.key)
             except ssl.SSLError:
                 _, x, _ = sys.exc_info()
-                if x.args[0] == ssl.SSL_ERROR_EOF:
-                    if len(x.args) > 1:
-                        raise self.EClose(x.args[1])
-                    else:
-                        raise self.EClose("Got SSL_ERROR_EOF")
-                else:
+                if x.args[0] != ssl.SSL_ERROR_EOF:
                     raise
 
+                if len(x.args) > 1:
+                    raise self.EClose(x.args[1])
+                else:
+                    raise self.EClose("Got SSL_ERROR_EOF")
         elif self.ssl_only:
             raise self.EClose("non-SSL connection received but disallowed")
 
@@ -906,7 +895,7 @@ class WebSocketServer(object):
         try:
             result = os.waitpid(-1, os.WNOHANG)
             while result[0]:
-                self.vmsg("Reaped child process %s" % result[0])
+                self.vmsg(f"Reaped child process {result[0]}")
                 result = os.waitpid(-1, os.WNOHANG)
         except (OSError):
             pass
@@ -926,19 +915,18 @@ class WebSocketServer(object):
         # handler process
         client = None
         try:
-            try:
-                client = self.do_handshake(startsock, address)
-            except self.EClose:
-                _, exc, _ = sys.exc_info()
+            client = self.do_handshake(startsock, address)
+        except self.EClose:
+            _, exc, _ = sys.exc_info()
                 # Connection was not a WebSockets connection
-                if exc.args[0]:
-                    self.msg("%s: %s" % (address[0], exc.args[0]))
-            except WebSocketServer.Terminate:
-                raise
-            except Exception:
-                _, exc, _ = sys.exc_info()
-                self.msg("handler exception: %s" % str(exc))
-                self.vmsg("exception", exc_info=True)
+            if exc.args[0]:
+                self.msg(f"{address[0]}: {exc.args[0]}")
+        except WebSocketServer.Terminate:
+            raise
+        except Exception:
+            _, exc, _ = sys.exc_info()
+            self.msg(f"handler exception: {str(exc)}")
+            self.vmsg("exception", exc_info=True)
         finally:
 
             if client and client != startsock:
@@ -951,12 +939,11 @@ class WebSocketServer(object):
         Get file descriptors for the loggers.
         They should not be closed when the process is forked.
         """
-        descriptors = []
-        for handler in self.logger.parent.handlers:
-            if isinstance(handler, logging.FileHandler):
-                descriptors.append(handler.stream.fileno())
-
-        return descriptors
+        return [
+            handler.stream.fileno()
+            for handler in self.logger.parent.handlers
+            if isinstance(handler, logging.FileHandler)
+        ]
 
     def start_server(self):
         """
@@ -999,99 +986,94 @@ class WebSocketServer(object):
         try:
             while True:
                 try:
-                    try:
-                        startsock = None
-                        pid = err = 0
-                        child_count = 0
+                    startsock = None
+                    pid = err = 0
+                    child_count = 0
 
-                        if multiprocessing:
-                            # Collect zombie child processes
-                            child_count = len(multiprocessing.active_children())
+                    if multiprocessing:
+                        # Collect zombie child processes
+                        child_count = len(multiprocessing.active_children())
 
-                        time_elapsed = time.time() - self.launch_time
-                        if self.timeout and time_elapsed > self.timeout:
-                            self.msg('listener exit due to --timeout %s'
-                                    % self.timeout)
+                    time_elapsed = time.time() - self.launch_time
+                    if self.timeout and time_elapsed > self.timeout:
+                        self.msg(f'listener exit due to --timeout {self.timeout}')
+                        break
+
+                    if self.idle_timeout:
+                        idle_time = 0
+                        if child_count == 0:
+                            idle_time = time.time() - last_active_time
+                        else:
+                            idle_time = 0
+                            last_active_time = time.time()
+
+                        if idle_time > self.idle_timeout and child_count == 0:
+                            self.msg(f'listener exit due to --idle-timeout {self.idle_timeout}')
                             break
 
-                        if self.idle_timeout:
-                            idle_time = 0
-                            if child_count == 0:
-                                idle_time = time.time() - last_active_time
-                            else:
-                                idle_time = 0
-                                last_active_time = time.time()
+                    try:
+                        self.poll()
 
-                            if idle_time > self.idle_timeout and child_count == 0:
-                                self.msg('listener exit due to --idle-timeout %s'
-                                            % self.idle_timeout)
-                                break
-
-                        try:
-                            self.poll()
-
-                            ready = select.select([lsock], [], [], 1)[0]
-                            if lsock in ready:
-                                startsock, address = lsock.accept()
-                            else:
-                                continue
-                        except self.Terminate:
-                            raise
-                        except Exception:
-                            _, exc, _ = sys.exc_info()
-                            if hasattr(exc, 'errno'):
-                                err = exc.errno
-                            elif hasattr(exc, 'args'):
-                                err = exc.args[0]
-                            else:
-                                err = exc[0]
-                            if err == errno.EINTR:
-                                self.vmsg("Ignoring interrupted syscall")
-                                continue
-                            else:
-                                raise
-
-                        if self.run_once:
-                            # Run in same process if run_once
-                            self.top_new_client(startsock, address)
-                            if self.ws_connection :
-                                self.msg('%s: exiting due to --run-once'
-                                        % address[0])
-                                break
-                        elif multiprocessing:
-                            self.vmsg('%s: new handler Process' % address[0])
-                            p = multiprocessing.Process(
-                                    target=self.top_new_client,
-                                    args=(startsock, address))
-                            p.start()
-                            # child will not return
+                        ready = select.select([lsock], [], [], 1)[0]
+                        if lsock in ready:
+                            startsock, address = lsock.accept()
                         else:
-                            # python 2.4
-                            self.vmsg('%s: forking handler' % address[0])
-                            pid = os.fork()
-                            if pid == 0:
-                                # child handler process
-                                self.top_new_client(startsock, address)
-                                break  # child process exits
-
-                        # parent process
-                        self.handler_id += 1
-
-                    except (self.Terminate, SystemExit, KeyboardInterrupt):
-                        self.msg("In exit")
-                        # terminate all child processes
-                        if multiprocessing and not self.run_once:
-                            children = multiprocessing.active_children()
-
-                            for child in children:
-                                self.msg("Terminating child %s" % child.pid)
-                                child.terminate()
-
-                        break
+                            continue
+                    except self.Terminate:
+                        raise
                     except Exception:
-                        exc = sys.exc_info()[1]
-                        self.msg("handler exception: %s", str(exc))
-                        self.vmsg("exception", exc_info=True)
+                        _, exc, _ = sys.exc_info()
+                        if hasattr(exc, 'errno'):
+                            err = exc.errno
+                        elif hasattr(exc, 'args'):
+                            err = exc.args[0]
+                        else:
+                            err = exc[0]
+                        if err != errno.EINTR:
+                            raise
+
+                        self.vmsg("Ignoring interrupted syscall")
+                        continue
+                    if self.run_once:
+                        # Run in same process if run_once
+                        self.top_new_client(startsock, address)
+                        if self.ws_connection:
+                            self.msg(f'{address[0]}: exiting due to --run-once')
+                            break
+                    elif multiprocessing:
+                        self.vmsg(f'{address[0]}: new handler Process')
+                        p = multiprocessing.Process(
+                                target=self.top_new_client,
+                                args=(startsock, address))
+                        p.start()
+                                            # child will not return
+                    else:
+                            # python 2.4
+                        self.vmsg(f'{address[0]}: forking handler')
+                        pid = os.fork()
+                        if pid == 0:
+                            # child handler process
+                            self.top_new_client(startsock, address)
+                            break  # child process exits
+
+                    # parent process
+                    self.handler_id += 1
+
+                except (self.Terminate, SystemExit, KeyboardInterrupt):
+                    self.msg("In exit")
+                        # terminate all child processes
+                    if multiprocessing and not self.run_once:
+                        children = multiprocessing.active_children()
+
+                        for child in children:
+                            self.msg(f"Terminating child {child.pid}")
+                            child.terminate()
+
+                    break
+                except Exception:
+                    exc = sys.exc_info()[1]
+                    self.msg("handler exception: %s", str(exc))
+                    self.vmsg("exception", exc_info=True)
 
                 finally:
                     if startsock:

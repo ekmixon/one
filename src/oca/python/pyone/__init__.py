@@ -235,7 +235,7 @@ class OneServer(xmlrpc.client.ServerProxy):
         if methodname in self.__helpers:
             return self.__helpers[methodname](self, *params)
 
-        ret = self._do_request("one."+methodname, self._cast_parms(params))
+        ret = self._do_request(f"one.{methodname}", self._cast_parms(params))
         return self.__response(ret)
 
     def _do_request(self, method, params):
@@ -268,10 +268,8 @@ class OneServer(xmlrpc.client.ServerProxy):
 
         if sucess:
             ret = raw_response[1]
-            if isinstance(ret, string_types):
-                # detect xml
-                if ret[0] == '<':
-                    return bindings.parseString(ret.encode("utf-8"))
+            if isinstance(ret, string_types) and ret[0] == '<':
+                return bindings.parseString(ret.encode("utf-8"))
             return ret
 
         message = raw_response[1]
@@ -351,4 +349,4 @@ class RequestsTransport(xmlrpc.client.Transport):
         scheme = 'https' if self.use_https else 'http'
         handler = handler.lstrip('/')
 
-        return '%s://%s/%s' % (scheme, host, handler)
+        return f'{scheme}://{host}/{handler}'

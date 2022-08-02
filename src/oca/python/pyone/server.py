@@ -19,7 +19,7 @@ from os import environ
 
 _test_fixture = (environ.get("PYONE_TEST_FIXTURE", "False").lower() in ["1", "yes", "true"])
 
-if _test_fixture is False:
+if not _test_fixture:
     from . import OneServer
 else:
     from pyone.tester import OneServerTester as OneServer

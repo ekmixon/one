@@ -98,12 +98,12 @@ class OneAcl():
         resources = resources.split("/")
 
         if len(resources) != 2:
-            raise Exception("Resource '{}' malformed".format("/".join(resources)))
+            raise Exception(f"""Resource '{"/".join(resources)}' malformed""")
 
         res = resources[0].split("+")
         for resource in res:
-            if not resource.upper() in RESOURCES:
-                raise Exception("Resource '{}' does not exist".format(resource))
+            if resource.upper() not in RESOURCES:
+                raise Exception(f"Resource '{resource}' does not exist")
 
             ret += RESOURCES[resource.upper()]
 
@@ -121,8 +121,8 @@ class OneAcl():
         rights = rights.split("+")
 
         for right in rights:
-            if not right.upper() in RIGHTS:
-                raise Exception("Right '{}' does not exist".format(right))
+            if right.upper() not in RIGHTS:
+                raise Exception(f"Right '{right}' does not exist")
 
             ret += RIGHTS[right.upper()]
 
@@ -142,16 +142,16 @@ class OneAcl():
     #
     # @return Tuple an Tuple containing 3(4) strings (hex 64b numbers)
     def parse_rule(self, rule_str):
-        ret = []
-
         rule_str = rule_str.split(" ")
 
-        if len(rule_str) != 3 and len(rule_str) != 4:
+        if len(rule_str) not in [3, 4]:
             raise Exception("String needs three or four components: User, Resource, Rights [,Zone]")
 
-        ret.append(self.parse_users(rule_str[0]))
-        ret.append(self.parse_resources(rule_str[1]))
-        ret.append(self.parse_rights(rule_str[2]))
+        ret = [
+            self.parse_users(rule_str[0]),
+            self.parse_resources(rule_str[1]),
+            self.parse_rights(rule_str[2]),
+        ]
 
         if len(rule_str) == 3:
             return ret[0], ret[1], ret[2]
@@ -168,7 +168,7 @@ class OneAcl():
     # @return [Integer] the numeric value for the given id_str
     def calculate_ids(self, id_str):
         if not re.match('^([\#@\%]\d+|\*)$', id_str):
-            raise Exception("ID string '{}' malformed".format(id_str))
+            raise Exception(f"ID string '{id_str}' malformed")
 
         users_value = 0
 

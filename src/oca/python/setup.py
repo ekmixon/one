@@ -47,9 +47,9 @@ v1 = int(version.split('.')[1])
 v2 = int(version.split('.')[2])
 
 if v1 >= 90 or v2 >= 90:
-    pyone_version = version + 'rc1'
+    pyone_version = f'{version}rc1'
 elif v1 >= 80 or v2 >= 80:
-    pyone_version = version + 'b1'
+    pyone_version = f'{version}b1'
 else:
     pyone_version = version
 

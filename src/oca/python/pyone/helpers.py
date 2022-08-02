@@ -38,11 +38,6 @@ def marketapp_export(one, appid, dsid=None, name=None, vmtemplate_name=None):
     :return: a dictionary with the ID of the new Image as image and the ID of the new associated template as vmtemplate. If no template has been defined, it will return -1.
     '''
 
-    ret= {
-        "image": -1,
-        "vmtemplate": -1
-    }
-
     # find out the datastore
 
     if not dsid:
@@ -61,29 +56,26 @@ def marketapp_export(one, appid, dsid=None, name=None, vmtemplate_name=None):
     if app.STATE != MARKETPLACEAPP_STATES.READY:
         raise OneHelperException("Application is not in READY state")
 
-    if app.TYPE == MARKETPLACEAPP_TYPES.IMAGE:
-        if app.APPTEMPLATE64:
-            templ=b64decode(app.APPTEMPLATE64).decode()
-        else:
-            templ=""
+    if app.TYPE != MARKETPLACEAPP_TYPES.IMAGE:
+        raise OneHelperException(
+            f'App type {MARKETPLACEAPP_TYPES(app.TYPE).name} not supported'
+        )
 
-        if not name:
-            name = app.NAME
 
-        templ+='''\nNAME="%s"\nFROM_APP="%d"''' % (name,app.ID)
+    templ = b64decode(app.APPTEMPLATE64).decode() if app.APPTEMPLATE64 else ""
+    if not name:
+        name = app.NAME
 
-        ret['image'] = one.image.allocate(templ,dsid)
+    templ+='''\nNAME="%s"\nFROM_APP="%d"''' % (name,app.ID)
 
-        if 'VMTEMPLATE64' in app.TEMPLATE:
-            vmtempl = b64decode(app.TEMPLATE['VMTEMPLATE64']).decode()
-            if not vmtemplate_name:
-                vmtemplate_name = app.NAME
+    ret = {"image": -1, "vmtemplate": -1, 'image': one.image.allocate(templ, dsid)}
+    if 'VMTEMPLATE64' in app.TEMPLATE:
+        vmtempl = b64decode(app.TEMPLATE['VMTEMPLATE64']).decode()
+        if not vmtemplate_name:
+            vmtemplate_name = app.NAME
 
-            vmtempl += '''\nNAME="%s"\nDISK=[ IMAGE_ID = %d ]''' % (vmtemplate_name, ret['image'])
+        vmtempl += '''\nNAME="%s"\nDISK=[ IMAGE_ID = %d ]''' % (vmtemplate_name, ret['image'])
 
-            ret['vmtemplate'] = one.template.allocate(vmtempl)
-
-    else:
-        raise OneHelperException('App type %s not supported' % MARKETPLACEAPP_TYPES(app.TYPE).name)
+        ret['vmtemplate'] = one.template.allocate(vmtempl)
 
     return ret

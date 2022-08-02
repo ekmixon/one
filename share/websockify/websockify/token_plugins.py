@@ -34,10 +34,7 @@ class ReadOnlyTokenFile(BasePlugin):
         if self._targets is None:
             self._load_targets()
 
-        if token in self._targets:
-            return self._targets[token]
-        else:
-            return None
+        return self._targets[token] if token in self._targets else None
 
 
 # the above one is probably more efficient, but this one is
@@ -68,10 +65,7 @@ class BaseTokenAPI(BasePlugin):
 
         resp = requests.get(self.source % token)
 
-        if resp.ok:
-            return self.process_result(resp)
-        else:
-            return None
+        return self.process_result(resp) if resp.ok else None
 
 
 class JSONTokenApi(BaseTokenAPI):

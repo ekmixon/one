@@ -30,7 +30,7 @@ def build_lex(target, source, env):
     src_name = os.path.basename(src)
 
     os.chdir(src_dir)
-    os.system("flex "+src_name)
+    os.system(f"flex {src_name}")
     os.chdir(cwd)
 
     return None
@@ -39,7 +39,7 @@ def build_lex(target, source, env):
 def emitter_lex(target, source, env):
     src = SCons.Util.to_String(source[0])
     (src_name, src_ext) = os.path.splitext(os.path.basename(src))
-    target.append(src_name+".h")
+    target.append(f"{src_name}.h")
     return target, source
 
 
@@ -60,8 +60,8 @@ def build_bison(target, source, env):
     (base, ext) = os.path.splitext(src_name)
 
     os.chdir(src_dir)
-    os.system("bison "+src_name)
-    os.rename(base+".hh", base+".h")
+    os.system(f"bison {src_name}")
+    os.rename(f"{base}.hh", f"{base}.h")
     os.chdir(cwd)
 
     return None
@@ -70,7 +70,7 @@ def build_bison(target, source, env):
 def emitter_bison(target, source, env):
     src = SCons.Util.to_String(source[0])
     (src_name, src_ext) = os.path.splitext(os.path.basename(src))
-    target.append(src_name+".h")
+    target.append(f"{src_name}.h")
     return target, source
 
 

@@ -85,7 +85,7 @@
     "immutable": "4.0.0-rc.12",
     "intersection-observer": "0.11.0",
     "jsonschema": "1.2.7",
-    "jsonwebtoken": "8.5.1",
+    "jsonwebtoken": "9.0.0",
     "jwt-simple": "0.5.6",
     "lockfile": "1.0.4",
     "luxon": "1.25.0",

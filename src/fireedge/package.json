@@ -74,7 +74,7 @@
     "cross-env": "7.0.2",
     "dagre": "0.8.5",
     "dompurify": "2.2.6",
-    "express": "4.17.1",
+    "express": "4.20.0",
     "fs-extra": "9.0.1",
     "fuse.js": "6.4.1",
     "guacamole-opennebula": "1.0.0",

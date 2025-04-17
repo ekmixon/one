@@ -80,7 +80,7 @@
     "guacamole-opennebula": "1.0.0",
     "helmet": "4.1.1",
     "http": "0.0.1-security",
-    "http-proxy-middleware": "1.0.5",
+    "http-proxy-middleware": "2.0.9",
     "https": "1.0.0",
     "immutable": "4.0.0-rc.12",
     "intersection-observer": "0.11.0",
